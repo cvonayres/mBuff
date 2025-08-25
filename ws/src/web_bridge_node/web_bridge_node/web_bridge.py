@@ -1,20 +1,32 @@
 import os, sys, threading
-from typing import Literal
+from enum import Enum
+from typing import Optional
+
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
 
-MoveDir = Literal["forward", "backward", "left", "right", "stop"]
+
+class Move(str, Enum):
+    FORWARD  = "forward"
+    BACKWARD = "backward"
+    LEFT     = "left"
+    RIGHT    = "right"
+    STOP     = "stop"
+
 
 class Command(BaseModel):
-    action: MoveDir
-    speed: int | None = None
-    note: str | None = None
+    action: Move
+    speed: Optional[int] = None
+    note: Optional[str] = None
 
-def make_app(node: Node) -> FastAPI:
+
+def make_app(node: "WebBridgeNode") -> FastAPI:
     app = FastAPI(title="mBuff Web Bridge")
 
     origins = os.getenv("WEB_ORIGINS", "*")
@@ -31,37 +43,55 @@ def make_app(node: Node) -> FastAPI:
     def health():
         return {"ok": True, "node": node.get_name()}
 
-    # Frontend expects this:
     @app.get("/api/status")
     def status():
-        # TODO: fill real status later
-        return {"ok": True, "battery": None, "connected": True}
+        # TODO: expand with real telemetry later
+        return {"ok": True, "connected": True}
 
+    # Generic route matches the website's pattern too
     @app.post("/api/move/{direction}")
     def move_direction(direction: str):
-        d = direction.lower()
-        if d not in {"forward", "backward", "left", "right", "stop"}:
+        try:
+            mv = Move(direction.lower())
+        except ValueError:
             raise HTTPException(status_code=400, detail=f"invalid direction: {direction}")
-        node.get_logger().info(f"WEB MOVE: {d}")
-        return {"received": True, "action": d}
+        node._send_move(mv)
+        return {"received": True, "action": mv.value}
 
+    # Explicit routes
     @app.post("/api/move/forward")
-    def move_forward(): node.get_logger().info("WEB MOVE: forward"); return {"received": True, "action": "forward"}
+    def move_forward():
+        node._send_move(Move.FORWARD)
+        return {"received": True, "action": Move.FORWARD}
+
     @app.post("/api/move/backward")
-    def move_backward(): node.get_logger().info("WEB MOVE: backward"); return {"received": True, "action": "backward"}
+    def move_backward():
+        node._send_move(Move.BACKWARD)
+        return {"received": True, "action": Move.BACKWARD}
+
     @app.post("/api/move/left")
-    def move_left(): node.get_logger().info("WEB MOVE: left"); return {"received": True, "action": "left"}
+    def move_left():
+        node._send_move(Move.LEFT)
+        return {"received": True, "action": Move.LEFT}
+
     @app.post("/api/move/right")
-    def move_right(): node.get_logger().info("WEB MOVE: right"); return {"received": True, "action": "right"}
+    def move_right():
+        node._send_move(Move.RIGHT)
+        return {"received": True, "action": Move.RIGHT}
+
     @app.post("/api/move/stop")
-    def move_stop(): node.get_logger().info("WEB MOVE: stop"); return {"received": True, "action": "stop"}
+    def move_stop():
+        node._send_move(Move.STOP)
+        return {"received": True, "action": Move.STOP}
 
     @app.post("/api/cmd")
     def receive_cmd(cmd: Command):
         node.get_logger().info(f"WEB CMD: action={cmd.action} speed={cmd.speed} note={cmd.note}")
+        node._send_move(cmd.action)  # optional: still publish
         return {"received": True}
 
     return app
+
 
 def start_server_in_thread(app: FastAPI, host: str, port: int):
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
@@ -70,9 +100,14 @@ def start_server_in_thread(app: FastAPI, host: str, port: int):
     t.start()
     return t
 
+
 class WebBridgeNode(Node):
     def __init__(self):
         super().__init__("web_bridge")
+
+        # Publisher (so endpoints can use it)
+        self.move_pub = self.create_publisher(String, "/mbuff/move", 10)
+
         port = int(os.getenv("WEB_BRIDGE_PORT", "5001"))
         app = make_app(self)
         start_server_in_thread(app, host="0.0.0.0", port=port)
@@ -84,6 +119,13 @@ class WebBridgeNode(Node):
 
     def _tick_callback(self):
         self.get_logger().debug("web_bridge heartbeat…")
+
+    def _send_move(self, action: Move):
+        self.get_logger().info(f"WEB MOVE: {action.value}")
+        msg = String()
+        msg.data = action.value
+        self.move_pub.publish(msg)
+
 
 def main():
     rclpy.init()
