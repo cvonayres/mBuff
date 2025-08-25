@@ -2,14 +2,21 @@ FROM ros:jazzy-ros-base
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-colcon-common-extensions python3-argcomplete \
-    build-essential git && rm -rf /var/lib/apt/lists/*
+    build-essential git curl && rm -rf /var/lib/apt/lists/*
 
-# Stay root during build & runtime (we can add a non-root later)
+# FastAPI + Uvicorn via pip (PEP 668 override OK in a container)
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip && \
+    pip3 install --no-cache-dir --break-system-packages fastapi uvicorn && \
+    rm -rf /var/lib/apt/lists/*
+    
 WORKDIR /ws
-
-# No named user in chown; numeric is fine even if no passwd entry exists
-COPY --chown=0:0 entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# ⬇️ copy the autostart script
+COPY run.sh /run.sh
+RUN chmod +x /run.sh
+
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["bash"]
+# ⬇️ run the launch file on container start
+CMD ["bash", "/run.sh"]
