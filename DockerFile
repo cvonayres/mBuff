@@ -5,6 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential git curl python3-pip \
     # Sense HAT + tools
     python3-sense-hat i2c-tools \
+    # mBot serial support
+    python3-serial \
   && rm -rf /var/lib/apt/lists/*
 
 # FastAPI + Uvicorn via pip (PEP 668 override OK in a container)
