@@ -69,8 +69,10 @@ class MsenseHatNode(Node):
     # -------------------------------------------------------------------------
     # Helper methods
     def display_face(self, pixels):
+    def display_face(self, pixels):
         """Display a list of 64 RGB tuples on the Sense HAT or print them if simulated."""
-        display_pixels(self.sense, pixels)
+        display_pixels(pixels)
+
 
     def schedule_blink(self) -> None:
         """Schedule a random blink if not currently showing an image."""
@@ -191,7 +193,7 @@ class MsenseHatNode(Node):
                     pass
                 setattr(self, timer_attr, None)
         # Display the image
-        display_pixels(self.sense, pixels)
+        display_pixels(pixels)
         # Schedule reversion after 15 seconds
         self.create_timer(15.0, self.end_image_display)
 
