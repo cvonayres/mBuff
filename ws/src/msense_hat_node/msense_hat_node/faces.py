@@ -16,10 +16,7 @@ def normal_face() -> List[Tuple[int, int, int]]:
     face[2 * 8 + 5] = WHITE
     # curved smile (your layout)
     face[5 * 8 + 2] = RED
-    face[5 * 8 + 3] = RED
-    face[5 * 8 + 4] = RED
     face[5 * 8 + 5] = RED
-    face[6 * 8 + 2] = RED
     face[6 * 8 + 3] = RED
     face[6 * 8 + 4] = RED
     return face
